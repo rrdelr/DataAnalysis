@@ -9,92 +9,48 @@
 import pandas as pd
 import plotly.graph_objs as go
 import numpy as np
+import plotly.express as px
 
 # Import from
 from plotly.subplots import make_subplots
 from scipy import stats
 
-# PATH variables (Main path and subfolders)
-PATH = "./Data"
-STATSPATH = "/Statistical data/"
-ALLPATH = "/All waves/"
-SPECPATH = "/Spectral data/"
+pd.options.mode.chained_assignment = None  # default='warn'
 
+# PATH variables (Main path and subfolders)
+PATH = "./Data/"
 # Plotting functions
 
-
-def f_ff(stent):
-    """ Frequency plotting
-
-    Arguments:
-    stent -- entry file
-    """
-    df = pd.read_csv(PATH + SPECPATH + stent, usecols=np.arange(261))  # Rotate the data
+def to_df(stent):
+    df = pd.read_excel(PATH + stent, parse_dates=['Date'])
     # print(df.head().to_string())
-    fig = make_subplots(rows=1, cols=1)
-
-    fig.append_trace(go.Scatter(
-        x=df['date2'],
-        y=df['F 0'],
-        name="F 0"),
-        row=1,
-        col=1
-    )
-
-    fig.append_trace(go.Scatter(
-        x=df['date2'],
-        y=df['F 0.5'],
-        name="F 0.5"),
-        row=1,
-        col=1
-    )
-
-    fig.append_trace(go.Scatter(
-        x=df['date2'],
-        y=df['F 1'],
-        name="F 1"),
-        row=1,
-        col=1
-    )
-
-    fig.update_layout(
-        title_text="Frecuencia y tiempo",
-        title_x=0.5,
-        font=dict(size=18))
-    fig.update_xaxes(title_text="Fecha")
-    fig.update_yaxes(title_text="Frecuencia")
-
-    fig.show()
+    return df[0:98241]
 
 
-def gen_scat(stent, stpath, vart, var1, *argv):
+def gen_scat(df, stmo, endmo, vart, *argv):
     """ Generic scatter plot
 
     Arguments:
-    stent -- entry file
+    df -- entry df
     stpath -- path variable
     var1 -- first variable (x-axis)
     vart -- y axis
     args -- additional variables to plot (x-ax)
     """
-    df = pd.read_csv(PATH + stpath + stent)
+    # df = pd.read_excel(PATH + stent)
     # print(df.head().to_string())
     fig = make_subplots(rows=1, cols=1)
 
-    df['dateT'] = pd.to_datetime(df['date2'])
+    df[vart] = pd.to_datetime(df['Date']).dt.date
+    df[vart] = df[vart].astype(str) + ' ' + df['UTC Time'].astype(str)
+    df[vart] = df[vart][0:98241]
+    df[vart] = pd.to_datetime(df[vart])
 
     # date adjustment
-    df = df_tf(df, 2019, 6, 15, 2019, 10, 16)
-    df = df.sort_values(by=['dateT'])
-    # df = remove_outliers(df, var1)
+    df = df_tf(df, vart, 2019, stmo, 1, 2019, endmo, 1)
+    df = df.sort_values(by=[vart])
+    #df = remove_outliers(df, var1)
 
-    fig.append_trace(go.Scatter(
-        x=df[vart],
-        y=df[var1],
-        name=var1),
-        row=1,
-        col=1
-    )
 
     for arg in argv:
         fig.append_trace(go.Scatter(
@@ -106,14 +62,116 @@ def gen_scat(stent, stpath, vart, var1, *argv):
         )
 
     fig.update_layout(
-        title_text=(var1 + " y " + vart),
+        title_text=(" "),
         title_x=0.5,
         font=dict(size=18))
 
     fig.show()
 
 
-def gen_vs(stent, stpath, varx, vary):
+def df_tf(df, vart, d1, m1, y1, d2, m2, y2):
+    """ DF timeframe setter
+
+    Arguments:
+    df -- dataframe
+    d1 -- start day
+    m1 -- start month
+    y1 -- start year
+    d2 -- end day
+    m2 -- end month
+    y2 -- end year
+    """
+    m1 = int(m1)
+    m2 = int(m2)
+    maska = (str(d1) + '/' + str(m1) + '/' + str(y1) + ' 00:00:00')
+    maskb = (str(d2) + '/' + str(m2) + '/' + str(y2) + ' 00:00:00')
+    mask = (df[vart] > maska) & (df[vart] <= maskb)
+    return df[mask]
+
+
+def remove_outliers(df, col):
+    """ removes outliers (+- 3sd's)
+
+    Arguments:
+    df -- dataframe
+    col -- column to work on
+    """
+    df = df[(np.abs(stats.zscore(df[col])) < 0.5)]
+    return df
+
+
+def info(df, *argv):
+    for arg in argv:
+        print(arg)
+        print("Mean: {0}".format(df[arg].mean()))
+        print("Std. Dev: {0}".format(df[arg].std()))
+
+
+def num2dir(d,deruta16=True):
+    if deruta16: dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+    else: dirs = ['N', 'NNE', 'ENE', 'E', 'ESE', 'SSE', 'S', 'SSW', 'WSW', 'W', 'WNW', 'NNW']
+    ix = round(d / (360. / len(dirs)))
+    return dirs[ix % len(dirs)]
+
+
+def makerange(min, max, nbins):
+    ranges = []
+    rangestx = []
+    rangelen = (max - min) / (nbins)
+    rangeval = min
+    ranges.append(rangeval)
+
+    while rangeval < max:
+        rangeval2 = rangeval + rangelen
+        rangeval2 = round(rangeval2, 2)
+        rangeval = round(rangeval, 2)
+        rangestx.append("{0} - {1}".format(rangeval, rangeval2))
+        ranges.append(rangeval2)
+        rangeval = round(rangeval2, 2)
+
+    return rangestx, ranges
+
+
+def num2range(d, rangestx, ranges, index=False):
+    lx = 0
+    while d > ranges[lx]:
+        try:
+            if d < ranges[lx+1]:
+                break
+        except:
+            0
+        lx += 1
+    if index:
+        return lx
+    else:
+        return rangestx[lx]
+
+
+def wrose(dfa, speed, dir, n_bins):
+    df = dfa.filter([speed, dir],axis=1)
+    df = flipdir(df, dir)
+    # df = DataF.dropna()
+
+    rangestx, ranges = makerange(df[speed].min(), df[speed].max(), n_bins)
+    df['Indexes'] = df[speed].apply(lambda x: num2range(x, rangestx, ranges, index=True))
+    df['Interval (cm/s)'] = df[speed].apply(lambda x: num2range(x, rangestx, ranges))
+    df['Direction'] = df[dir].apply(lambda x: num2dir(x))
+
+    df = df.groupby(["Indexes", "Direction", "Interval (cm/s)"]).size().reset_index(name="frequency")
+    df = df.sort_values(by='Indexes')
+    dirdict = {"Direction": ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W',
+                             'WNW', 'NW', 'NNW']}
+
+    fig = px.bar_polar(df, r='frequency', theta="Direction",
+                       color="Interval (cm/s)", template="plotly_white",
+                       color_discrete_sequence=px.colors.sequential.Plasma_r,
+                       category_orders=dirdict,
+                       title="Rosa de viento: {}".format(dfa["Date"].values[0])
+                       )
+    fig.show()
+
+
+def gen_vs(stent, varx, vary):
     """ Generic VS-plot for x-vs-y arrangements.
 
     Arguments:
@@ -122,7 +180,8 @@ def gen_vs(stent, stpath, varx, vary):
     varx -- variable x
     vary -- variable y
     """
-    df = pd.read_csv(PATH + stpath + stent)
+    df = stent
+    df = df.sort_values(by=varx)
     # print(df.head().to_string())
     fig = make_subplots(rows=1, cols=1)
 
@@ -142,41 +201,60 @@ def gen_vs(stent, stpath, varx, vary):
     fig.show()
 
 
-def df_tf(df, d1, m1, y1, d2, m2, y2):
-    """ DF timeframe setter
-
-    Arguments:
-    df -- dataframe
-    d1 -- start day
-    m1 -- start month
-    y1 -- start year
-    d2 -- end day
-    m2 -- end month
-    y2 -- end year
-    """
-    maska = (str(d1) + '/' + str(m1) + '/' + str(y1) + ' 00:00:00')
-    maskb = (str(d2) + '/' + str(m2) + '/' + str(y2) + ' 00:00:00')
-    mask = (df['dateT'] > maska) & (df['dateT'] <= maskb)
-    return df[mask]
+def sep_df(df, column):
+    df.loc[:,'Month'] = df[column].dt.month
+    #print(df)
+    array = df['Month'].unique()
+    frames = []
+    for object in array:
+        df_new = df.loc[df['Month'] == object]
+        df_new.loc[:,"Date"] = df_new["Date"].dt.date
+        #print(df_new)
+        frames.append(df_new)
+    #print(frames)
+    return frames
 
 
-def remove_outliers(df, col):
-    """ removes outliers (+- 3sd's)
+def box_plot(df, date, *argv):
+    df = grpday_df(df)
+    fig = make_subplots(rows=1, cols=1)
+    for arg in argv:
+        fig.append_trace(go.Box(x=df[date], y=df[arg], name=arg), row=1, col=1)
 
-    Arguments:
-    df -- dataframe
-    col -- column to work on
-    """
-    df = df[(np.abs(stats.zscore(df[col])) < 0.5)]
+    fig.update_layout(title_text="Distribución de datos: día {}".format(df[date].values[0]),
+                      title_x=0.5,
+                      font=dict(size=18),
+                      yaxis_title_text='magnitud',  # xaxis label
+                      xaxis_title_text='día',  # yaxis label
+                      bargap=0.0  # gap between bars of the same location coordinates
+                      )
+    fig.show()
+
+
+def grpday_df(df):
+    df = df.copy(deep=True)
+    df.loc[:, "Date"] = df["Date"].dt.date
     return df
 
 
-# Main sequence
-gen_scat("boya_32_statistical_params_20191119142107.csv", STATSPATH, 'dateT', "Energy", "Power")
-gen_scat("boya_32_statistical_params_20191119142107.csv", STATSPATH, 'dateT', "Tp", "Hm0", 'DirTp', 'Hmax')
+def flipdir(df, dir):
+    df[dir] = df[dir] + 180
+    return df
 
-# gen_scat("boya_32_all_waves_20191125111628_agosto.csv", ALLPATH, "direction")
-# gen_scat("boya_32_statistical_params_20191119142107.csv", STATSPATH, "T01", "T02")
-# gen_scat("boya_32_buoy_params_20191119142048.csv", STATSPATH,
-# "temperatura_agua", "temperatura_interna", varT="fecha_gps2")
-# f_ff("boya_32_spectral_param_psd_20191125112048_junio.csv")
+
+def avg_plot(df, date, *argv):
+    dfa = df.copy(deep=True)
+    dfa = dfa.resample('D', on=date).mean()
+    print(dfa)
+    fig = make_subplots(rows=1, cols=1)
+    for arg in argv:
+        fig.append_trace(go.Scatter(x=dfa.index, y=dfa[arg], name=arg), row=1, col=1)
+
+    fig.update_layout(title_text="Distribución de datos: día",
+                      title_x=0.5,
+                      font=dict(size=18),
+                      yaxis_title_text='magnitud',  # xaxis label
+                      xaxis_title_text='día',  # yaxis label
+                      bargap=0.0  # gap between bars of the same location coordinates
+                      )
+    fig.show()
