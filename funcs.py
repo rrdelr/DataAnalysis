@@ -342,11 +342,27 @@ def compare(dfs, stmo, endmo, arg):
         title_x=0.5,
         font=dict(size=18))
 
-    fig.show()
-    # if not os.path.exists(PATHX + name + "/"):
-    #     os.makedirs(PATHX + name + "/")
-    # fig.write_image(PATHX + name + "/avg_plot" + argv[0] + ".png", width=1250, height=750)
-    # return 0
+    # fig.show()
+    if not os.path.exists(PATHX + 'combined' + "/"):
+        os.makedirs(PATHX + 'combined' + "/")
+    fig.write_image(PATHX + 'combined' + "/avg_plot_combined_" + arg + ".png", width=1250, height=750)
+    return 0
+
+def heat_mixed(dfs):
+
+    df1 = dfs[0].resample('D', on="Date").mean()
+    df2 = dfs[1].resample('D', on="Date").mean()
+    df = df1.merge(df2, left_on=df1.index, right_on=df2.index)
+
+    matrix = np.triu(df.corr())
+    sns.heatmap(df.corr(), annot=True, fmt='.1g', mask=matrix)
+    plt.tight_layout()
+    # plt.show()
+
+    if not os.path.exists(PATHX + 'combined' + "/"):
+        os.makedirs(PATHX + 'combined' + "/")
+    plt.savefig(PATHX + 'combined' + "/heatmap.png")
+    plt.clf()
 
 
 # dfa = df.copy(deep=True)
